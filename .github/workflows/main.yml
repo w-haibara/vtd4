@@ -1,0 +1,51 @@
+name: CI/CD
+on:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    strategy:
+      matrix:
+        node-version: [12.x]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Get version
+      id: get_version
+      run: |
+        export version=`python3 -c "import json; input=json.load(open('package.json', 'r')); version=input['version'] ; print(version)"`
+        echo "::set-output name=version::v${version}"
+    - name: yarn install, build
+      run: |
+        yarn install
+        yarn build
+    - name: zip
+      run: |
+        zip -r vtd4.zip ./dist/*
+    - uses: actions/create-release@v1
+      id: create_release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.get_version.outputs.version }}
+        release_name: ${{ steps.get_version.outputs.version }}
+        draft: false
+        prerelease: false
+    - uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./vtd4.zip
+        asset_name: vtd4.zip
+        asset_content_type: application/zip
+    - name: automerge
+      uses: "pascalgn/automerge-action@v0.11.0"
+      env:
+        GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+    - name: send slack msg
+      uses: tokorom/action-slack-incoming-webhook@master
+      env:
+        INCOMING_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      with:
+        text: "<@UL0BWMZR7> deploy latest withoutconfirmation (https://github.com/w-haibara/vtd4/releases/latest)"
